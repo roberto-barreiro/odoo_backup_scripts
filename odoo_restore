@@ -1,0 +1,96 @@
+#!/bin/bash
+
+# Instructions
+# 1) Make symbolic link to /usr/sbin: ln -s /script_directory/odoo_restore /usr/sbin/odoo_restore
+# 2) Change link owner to root: chown root /usr/sbin/odoo_restore
+# 3) Give symbolic link permission to exec: chmod u+sx /usr/sbin/odoo_restore
+
+# Variables
+hostname="localhost"
+port="5432"
+user="odoo"
+role="odoo"
+default_database="dgm"
+default_filename="dgm_lastest.backup.gz"
+default_path=/home/roberto/Documentos/Backups/Odoo/$default_backup
+encoding="UTF8" # Encoding of the database
+
+# Check if $1 parameter is a file to restore, else assing default backup file
+filename="$1"
+if [ "$filename" == "" ]; then
+	filename=$default_path
+	echo " * No backup file was selected, using last backup to restore."
+fi
+
+if [ -s $filename ]; then
+	echo " * File to restore: $filename"
+else
+	echo " * The filename $filename is invalid or not exists"
+	exit 1
+fi
+
+# Select a database or use default databse
+echo " * Enter a database name (press [ENTER] to default: $default_database):"
+read database
+
+if [ "$database"  == "" ]; then
+        echo " * No database was selected, using default database: $default_database"
+        database=$default_database
+fi
+
+# Stop Odoo Server
+sudo /etc/init.d/odoo stop
+
+echo " * Unziping $filename"
+if gzip -dk $filename
+	then unzziped=`echo $filename | sed 's/.gz//g'`
+	echo " * Unzipped filename: $unzziped"
+else
+	exit 1
+fi
+
+# Restart postgresql server to kill active conections
+if sudo service postgresql restart
+	then echo " * Postgresql server restarted"
+else
+	exit 1
+fi
+
+# Delete database
+echo " * Checking if database $database exists"
+if psql -l | grep $database
+	then echo " * Deleting database $database"
+	if /usr/bin/dropdb $database
+		then echo " * Database $database deleted"
+	fi
+fi
+
+echo " * Creating fresh database $database"
+if /usr/bin/createdb $database -O $user -E $encoding
+	then echo " * Database $database created"
+else
+	exit 1
+fi
+
+echo " * Ready to restore database, press [ENTER] to continue"
+read ready
+
+echo " * Restoring database $database"
+if /usr/bin/pg_restore --host $hostname --port $port --username $user --dbname $database --role $role --no-password  --verbose $unzziped
+	then echo " * Database $database restored"
+else
+	exit 1
+fi
+
+echo " * Deleting extracted file from $filename"
+if rm $unzziped
+	then echo " * File $unzziped deleted"
+else
+	exit 1
+fi
+
+# Starts Odoo Server
+sudo /etc/init.d/odoo start
+
+echo " * Odoo database restoring ended"
+exit 0

@@ -1,0 +1,71 @@
+#!/bin/bash
+
+
+# Instructions
+# 1) Make symbolic link to /usr/sbin: ln -s /script_directory/odoo_backup /usr/sbin/odoo_backup
+# 2) Change link owner to root: chown root /usr/sbin/odoo_backup
+# 3) Give symbolic link permission to exec: chmod u+sx /usr/sbin/odoo_backup
+
+# Using
+# odoo_restore [DATABASE]
+
+# Variables
+hostname="localhost"
+port="5432"
+user="odoo"
+role="odoo"
+date=`date +"%Y%m%d_%H%M"`
+backup_folder="/media/documentos/Backups/Odoo/"
+database="$1"
+default_database="dgm"
+encoding="UTF8"
+database_backup_max_days="90" # Delete backups older than 90 days
+addons_backup_max_days="7" # Delete backups oldet than 7 days
+
+# Select default database if $1 parameter is not inputed
+if [ -z $1 ]; then
+	echo " * No database was selected, using default database: $default_database"
+	database=$default_database
+fi
+
+database_filename=$backup_folder""${database}_${date}".backup"
+database_lastest_filename=$backup_folder""${database}"_lastest.backup"
+addons_backup_folder=$backup_folder"Addons_"${date}
+
+echo " * Starting Odoo database backup"
+
+# Stop Odoo Server
+sudo /etc/init.d/odoo stop
+
+# Dump and Zip database to filename.gz and lastest_backup.gz
+
+echo " * Dumping database $database"
+/usr/bin/pg_dump --host $hostname --port $port --username $user --role $role --no-password  --format custom --blobs --encoding $encoding --verbose --file $database_filename --dbname $database
+cp $database_filename $database_lastest_filename
+
+echo " * Compressing $database_filename"
+gzip $database_filename
+echo " * Compressing $database_lastest_filename"
+gzip -f $database_lastest_filename
+
+# Addons backup
+echo " * Starting Odoo addons backup"
+cp -r /usr/lib/python2.7/dist-packages/openerp/ $addons_backup_folder
+echo " * Compressing addons"
+tar -cvzf $backup_folder""Addons_${date}.tar.gz $addons_backup_folder
+rm -r $addons_backup_folder
+
+# Remove old backups
+echo " * Removing Odoo database backups older than $database_backup_max_days days"
+find $backup_folder""${database}_*.gz -mtime +90 -exec rm {} \;
+
+echo " * Removing Odoo addons backups older than $addons_backup_max_days days"
+find $backup_folder""Addons_*.tar.gz -mtime +7 -exec rm {} \;
+
+# Start Odoo Server
+sudo /etc/init.d/odoo start
+
+echo " * Odoo database backup ended"
+echo ""
+
+exit 0

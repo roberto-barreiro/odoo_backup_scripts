@@ -20,7 +20,7 @@ database="$1"
 default_database="dgm"
 encoding="UTF8"
 database_backup_max_days="90" # Delete backups older than 90 days
-addons_backup_max_days="7" # Delete backups oldet than 7 days
+addons_backup_max_days="7" # Delete backups older than 7 days
 
 # Select default database if $1 parameter is not inputed
 if [ -z $1 ]; then
